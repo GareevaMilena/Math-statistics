@@ -9,21 +9,22 @@ for j = 1:3
         %Генерируем выборку из диапозона чисел с определенным распределением
         selection = [];
         for i = 1:n
-            selection(i) = cauchyrnd(0, 1);
+            selection(i) = normrnd(0, 1);
         end
         selection = sort(selection);
-        ost = mod(n, 4);
-        if (ost == 0)
-            i = n / 4;
-        else
-            i = floor(n / 4) + 1;
+        %коэффициент и cумма всех элементов выборки
+        r = 0;
+        r = n / 4;
+        koef = 1 / (n - 2 * r);
+        s = 0;
+        for i = floor(r+1):ceil(n-r)
+            s = s + selection(i);
         end
-        z1 = selection(i);
-        z2 = selection(n - i + 1);
-        x = (z1 + z2)/2;
+        %усеченное среднее
+        x = koef * s;
         array(k) = x;
     end
-    %Сумма всех полусумм квартилей
+    %Сумма всех усеченных средних
     z = 0;
     for k = 1:m
         z = z + array(k);
