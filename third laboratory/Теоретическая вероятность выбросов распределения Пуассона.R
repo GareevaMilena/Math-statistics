@@ -1,0 +1,5 @@
+x = qpois(c(0.25, 0.75), lambda = 10)
+print(x)
+left = x[1] - 1.5 * (x[2] - x[1])
+right = x[2] + 1.5 * (x[2] - x[1])
+print(ppois(left, lambda = 10) + (1 - ppois(right, lambda = 10)))
