@@ -1,16 +1,23 @@
 import numpy as np
-import pandas as pd 
 import matplotlib.pyplot as plt
 import ripper
+import os
+import sys
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+import pyglobus
+
 
 def whisker_bounds(signal):
     upper_quartile = np.percentile(signal, 75)
     lower_quartile = np.percentile(signal, 25)
 
     iqr = upper_quartile - lower_quartile
-    upper_bound = upper_quartile+1.5*iqr
-    lower_bound = lower_quartile-1.5*iqr
+    upper_bound = upper_quartile + 1.5 * iqr
+    lower_bound = lower_quartile - 1.5 * iqr
     return lower_bound, upper_bound
+
 
 def moving_average(signal, width):
     """
@@ -18,14 +25,16 @@ def moving_average(signal, width):
     """
     new_signal = np.zeros_like(signal)
     for i in range(0, signal.shape[0]):
-        new_signal[i] = np.mean(signal[max(0, i-width) : min(signal.shape[0], i+width)])
+        new_signal[i] = np.mean(signal[max(0, i - width): min(signal.shape[0], i + width)])
     return new_signal
+
 
 def is_outlier(signal, width):
     diff = signal - moving_average(signal, width)
     lower_bound, upper_bound = whisker_bounds(diff)
-    
+
     return (diff <= lower_bound) | (diff >= upper_bound)
+
 
 def replace_outliers(signal, width):
     sgn = signal.copy()
@@ -37,6 +46,7 @@ def replace_outliers(signal, width):
         sgn[idx] = np.nanmedian(ss)
     return sgn
 
+
 def confident_outliers_replace(signal):
     # choose width with 10% of data
     replaced = replace_outliers(signal, len(signal) // 10)
@@ -44,7 +54,9 @@ def confident_outliers_replace(signal):
     replaced = replace_outliers(replaced, len(signal) // 50)
     return replaced
 
+
 threshold = .85
+
 
 def get_useful_signal_boundaries(signal, bin_edges, step=100):
     for i in range(0, len(signal), step):
@@ -63,17 +75,18 @@ def get_useful_signal_boundaries(signal, bin_edges, step=100):
 
     return left, right
 
+
 def process(timestamp, signal, step=100):
     signal = signal.copy()
     hist, edges = np.histogram(signal)
     idx2, idx1 = np.argsort(hist)[-2:]
 
     left, right = get_useful_signal_boundaries(signal, (edges[idx1], edges[idx1 + 1]),
-                                      step=step)
+                                               step=step)
 
     if abs(hist[idx1] - hist[idx2]) / signal.shape[0] < 0.2:
         l1, r1 = get_useful_signal_boundaries(signal, (edges[idx2], edges[idx2 + 1]),
-                                     step=step)
+                                              step=step)
         left = max(left, l1)
         right = min(right, r1)
 
@@ -82,17 +95,17 @@ def process(timestamp, signal, step=100):
     return timestamp, signal
 
 
-
 # --------------------------------------
 signal_n = 20
-data_all = ripper.extract('', 38515)[0]
+sht_reader = pyglobus.util.ShtReader("sht38515.sht")
+signal = sht_reader.get_signal(signal_n)
+#data_all = ripper.extract('', 38515)[0]
 
-signal_name = data_all[signal_n]['name']
-x, amplitude = ripper.x_y(data_all[signal_n])
+x, amplitude = signal.get_data_x(), signal.get_data_y()
 x, amplitude = np.array(x), np.array(amplitude)
 
 plt.subplot(2, 2, 1)
-plt.title(f'Signal {signal_n} - {signal_name}:')
+plt.title(f'Signal {signal_n}:')
 plt.plot(x, amplitude)
 
 plt.subplot(2, 2, 2)
@@ -100,30 +113,31 @@ plt.hist(amplitude)
 
 xx, sgn = process(x, amplitude)
 plt.subplot(2, 2, 3)
-plt.title(f'Processed signal {signal_n} - {signal_name}')
+plt.title(f'Processed signal {signal_n}')
 plt.plot(xx, sgn)
 
 plt.subplot(2, 2, 4)
 plt.hist(sgn)
 
 plt.tight_layout()
-plt.show()
-# --------------------------------------
-
-
-
-
-
-# --------------------------------------
+SHT_NUMBER = 38515
+Title_str = 'ShotNo= ' + str(SHT_NUMBER) +' Signal= '+str(signal_n) + '.png'
+plt.savefig(Title_str)
+plt.clf()
+# # --------------------------------------
+#
+#
+# # --------------------------------------
 signal_n = 26
-data_all = ripper.extract('', 38852)[0]
+#data_all = ripper.extract('', 38852)[0]
+sht_reader = pyglobus.util.ShtReader("sht38852.SHT")
+signal = sht_reader.get_signal(signal_n)
 
-signal_name = data_all[signal_n]['name']
-x, amplitude = ripper.x_y(data_all[signal_n])
+x, amplitude = signal.get_data_x(), signal.get_data_y()
 x, amplitude = np.array(x), np.array(amplitude)
 
 plt.subplot(2, 2, 1)
-plt.title(f'Signal {signal_n} - {signal_name}:')
+plt.title(f'Signal {signal_n}:')
 plt.plot(x, amplitude)
 
 plt.subplot(2, 2, 2)
@@ -131,13 +145,15 @@ plt.hist(amplitude)
 
 xx, sgn = process(x, amplitude)
 plt.subplot(2, 2, 3)
-plt.title(f'Processed signal {signal_n} - {signal_name}')
+plt.title(f'Processed signal {signal_n}')
 plt.plot(xx, sgn)
 
 plt.subplot(2, 2, 4)
 plt.hist(sgn)
 
 plt.tight_layout()
-plt.show()
+SHT_NUMBER = 38852
+Title_str = 'ShotNo= ' + str(SHT_NUMBER) +' Signal= '+str(signal_n) + '.png'
+plt.savefig(Title_str)
 # --------------------------------------
 
