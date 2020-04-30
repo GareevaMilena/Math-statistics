@@ -8,7 +8,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir)
 import pyglobus
 
-
+#боксплот для нахождения выбросов
 def whisker_bounds(signal):
     upper_quartile = np.percentile(signal, 75)
     lower_quartile = np.percentile(signal, 25)
@@ -18,24 +18,22 @@ def whisker_bounds(signal):
     lower_bound = lower_quartile - 1.5 * iqr
     return lower_bound, upper_bound
 
-
+#скользяцее среднее, с помощью которого извлекаем тренд
 def moving_average(signal, width):
-    """
-    For trend extraction of signal
-    """
     new_signal = np.zeros_like(signal)
     for i in range(0, signal.shape[0]):
         new_signal[i] = np.mean(signal[max(0, i - width): min(signal.shape[0], i + width)])
     return new_signal
 
-
+#является ли значение в сигнале выбросом, покомпонентную разницу между сигналом и трендом загоняем в боксплот
 def is_outlier(signal, width):
+    #берем разницу между сигналом и трендом в окне
     diff = signal - moving_average(signal, width)
     lower_bound, upper_bound = whisker_bounds(diff)
 
     return (diff <= lower_bound) | (diff >= upper_bound)
 
-
+#заменяет найденные выбросы медианным значением
 def replace_outliers(signal, width):
     sgn = signal.copy()
     is_out = is_outlier(sgn, width)
@@ -46,7 +44,9 @@ def replace_outliers(signal, width):
         sgn[idx] = np.nanmedian(ss)
     return sgn
 
-
+#запускает два раза с шириной окна сначала 10%, потом 2%
+#с помощью 10% убираем большие выбросы
+#с помощью 2% убираем локальные выбросы, которые появились уже после уборки больших
 def confident_outliers_replace(signal):
     # choose width with 10% of data
     replaced = replace_outliers(signal, len(signal) // 10)
@@ -54,13 +54,12 @@ def confident_outliers_replace(signal):
     replaced = replace_outliers(replaced, len(signal) // 50)
     return replaced
 
-
-threshold = .85
-
-
-def get_useful_signal_boundaries(signal, bin_edges, step=100):
+#идем слева направо, потом справа налево с каким-то окном размера step
+def get_useful_signal_boundaries(signal, bin_edges, step, threshold):
     for i in range(0, len(signal), step):
+        #берем часть сигнала размера step
         part = signal[i:i + step]
+        #смотрим какие значениях сигнала находятся внутри границ
         idxs = (bin_edges[0] <= part) & (part <= bin_edges[1])
         if idxs.sum() / step < threshold:
             left = i
@@ -76,23 +75,39 @@ def get_useful_signal_boundaries(signal, bin_edges, step=100):
     return left, right
 
 
-def process(timestamp, signal, step=100):
+def process(timestamp, signal, step=100, threshold=0.85):
     signal = signal.copy()
+    # 1 этап получение гистограммы всего сигнала
+    # edges хранит в себе границы
     hist, edges = np.histogram(signal)
+    # 2 наиболее высоких столбика
+    # idx1 - самый большой
+    # idx2 - следующий после большого
     idx2, idx1 = np.argsort(hist)[-2:]
-
+    #находит границы полезного сигнала, без шумов
     left, right = get_useful_signal_boundaries(signal, (edges[idx1], edges[idx1 + 1]),
-                                               step=step)
-
+                                               step=step, threshold=threshold)
+#если два столбика отличаются высотой не больше, чем на 20 процентов
     if abs(hist[idx1] - hist[idx2]) / signal.shape[0] < 0.2:
         l1, r1 = get_useful_signal_boundaries(signal, (edges[idx2], edges[idx2 + 1]),
-                                              step=step)
+                                              step=step, threshold=threshold)
+        #Границы полезного сигнала
         left = max(left, l1)
         right = min(right, r1)
 
-    timestamp, signal = timestamp[left:right], signal[left:right]
-    signal = confident_outliers_replace(signal)
-    return timestamp, signal
+    cutted_timestamp, cutted_signal = timestamp[left:right], signal[left:right].copy()
+    #функция замены выбросов
+    norm_signal = confident_outliers_replace(cutted_signal)
+    # plt.clf()
+    # plt.plot(timestamp, signal, label='Оригинал')
+    # plt.plot(timestamp[:left], signal[:left], c='r')
+    # plt.plot(timestamp[right:], signal[right:], c='r', label='Шум')
+    #
+    # to_plot_idx = np.nonzero(cutted_signal-norm_signal)[0]
+    # plt.scatter(cutted_timestamp[to_plot_idx], cutted_signal[to_plot_idx], s=20, c='g', label = 'Выбросы')
+    # plt.legend()
+    # plt.show()
+    return cutted_timestamp, norm_signal
 
 
 # --------------------------------------
